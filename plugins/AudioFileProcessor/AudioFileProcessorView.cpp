@@ -20,6 +20,8 @@
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301 USA.
  *
+ * Modifications have been made to this file on August 18th, 2026 by Evan Kizer.
+ *
  */
 
 #include "AudioFileProcessorView.h"
@@ -69,7 +71,30 @@ AudioFileProcessorView::AudioFileProcessorView(Instrument* instrument,
 	m_reverseButton->setInactiveGraphic(PLUGIN_NAME::getIconPixmap(
 							"reverse_off"));
 	m_reverseButton->setToolTip(tr("Reverse sample"));
+	
+	m_saveLoopButton = new PixmapButton(this);
+	m_saveLoopButton->setCursor(Qt::PointingHandCursor);
+	
+	m_saveLoopButton->move(25,0);
+	m_saveLoopButton->setInactiveGraphic(PLUGIN_NAME::getIconPixmap(
+		"save_loop"));
+	m_saveLoopButton->setActiveGraphic(PLUGIN_NAME::getIconPixmap(
+		"save_loop"));
+	connect(m_saveLoopButton, SIGNAL(clicked()),
+		this, SLOT(saveLoop()));
+	m_saveLoopButton->setToolTip(tr("Save Loop"));
 
+	m_fixLoopButton = new PixmapButton(this);
+	m_fixLoopButton->setCursor(Qt::PointingHandCursor);
+	
+	m_fixLoopButton->move(0,0);
+	m_fixLoopButton->setInactiveGraphic(PLUGIN_NAME::getIconPixmap(
+		"fix_loop"));
+	m_fixLoopButton->setActiveGraphic(PLUGIN_NAME::getIconPixmap(
+		"fix_loop"));
+	connect(m_fixLoopButton, SIGNAL(clicked()),
+		this, SLOT(fixLoop()));
+	m_fixLoopButton->setToolTip(tr("Fix Loop"));
 // loop button group
 
 	auto m_loopOffButton = new PixmapButton(this);
@@ -264,10 +289,20 @@ void AudioFileProcessorView::openAudioFile()
 	m_waveView->updateSampleRange();
 }
 
+
+void AudioFileProcessorView::fixLoop(){
+	castModel<AudioFileProcessor>()->fixLoop();
+}
+
+void AudioFileProcessorView::saveLoop(){
+	castModel<AudioFileProcessor>()->saveLoop();
+}
+
 void AudioFileProcessorView::modelChanged()
 {
 	auto a = castModel<AudioFileProcessor>();
 	connect(a, &AudioFileProcessor::sampleUpdated, this, &AudioFileProcessorView::sampleUpdated);
+	
 	m_ampKnob->setModel(&a->ampModel());
 	m_startKnob->setModel(&a->startPointModel());
 	m_endKnob->setModel(&a->endPointModel());

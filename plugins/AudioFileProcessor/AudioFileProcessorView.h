@@ -20,6 +20,8 @@
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301 USA.
  *
+ * Modifications have been made to this file on August 18th, 2026 by Evan Kizer.
+ *
  */
 
 #ifndef LMMS_AUDIO_FILE_PROCESSOR_VIEW_H
@@ -53,6 +55,8 @@ public:
 protected slots:
 	void sampleUpdated();
 	void openAudioFile();
+	void fixLoop();
+	void saveLoop();
 
 protected:
 	virtual void dragEnterEvent(QDragEnterEvent* dee);
@@ -76,6 +80,10 @@ private:
 	AutomatableButtonGroup* m_loopGroup;
 	PixmapButton* m_stutterButton;
 	ComboBox* m_interpBox;
+	
+	PixmapButton* m_saveLoopButton;
+	PixmapButton* m_fixLoopButton;
+	
 } ;
 
 } // namespace gui

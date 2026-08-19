@@ -20,6 +20,8 @@
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301 USA.
  *
+ * Modifications have been made to this file on August 18th, 2026 by Evan Kizer.
+ *
  */
 
 #include "AudioFileProcessor.h"
@@ -32,8 +34,15 @@
 #include "LmmsTypes.h"
 #include "plugin_export.h"
 
-#include <QDomElement>
+#include "MainWindow.h"
+#include "GuiApplication.h"
 
+#include <QApplication>
+
+#include <QDomElement>
+#include <iostream>
+#include <fstream>
+#include <filesystem>
 
 namespace lmms
 {
@@ -91,7 +100,10 @@ AudioFileProcessor::AudioFileProcessor( InstrumentTrack * _instrument_track ) :
 				this, SLOT( loopPointChanged() ), Qt::DirectConnection );
 	connect( &m_stutterModel, SIGNAL( dataChanged() ),
 				this, SLOT( stutterModelChanged() ), Qt::DirectConnection );
-
+	
+	connect( &m_loopModel, SIGNAL( dataChanged() ), this, SLOT( onLoopModeChanged() ),Qt::DirectConnection);
+	
+	
 //interpolation modes
 	m_interpolationModel.addItem( tr( "None" ) );
 	m_interpolationModel.addItem( tr( "Linear" ) );
@@ -101,12 +113,271 @@ AudioFileProcessor::AudioFileProcessor( InstrumentTrack * _instrument_track ) :
 	pointChanged();
 }
 
+void AudioFileProcessor::saveFloatArrayToWav(const std::string& filename, const float* floatData, size_t numSamples, int sampleRate = 44100)
+{
+	unsigned int counter = 1;
+	std::filesystem::path path = filename;
+	// Check if the file already exists; if so, alter the filename
+	while (std::filesystem::exists(path)) {
+		// Creates a new name like "output_1.bin", "output_2.bin", etc.
+		path = path.parent_path() / 
+			(path.stem().string() + "_" + std::to_string(counter) + path.extension().string());
+		counter++;
+	}
+	
+	std::ofstream file(path, std::ios::binary);
+	if (!file.is_open()) {
+		return;
+	}
+		   // 1. Calculate Sizes
+	int numChannels = 1; // Mono
+	int bytesPerSample = 2; // 16-bit PCM = 2 bytes
+	int byteRate = sampleRate * numChannels * bytesPerSample;
+	int blockAlign = numChannels * bytesPerSample;
+	int subChunk2Size = numSamples * numChannels * bytesPerSample;
+	int chunkSize = 36 + subChunk2Size;
+	
+		   // 2. Write the RIFF Header
+	file.write("RIFF", 4);
+	file.write(reinterpret_cast<const char*>(&chunkSize), 4);
+	file.write("WAVE", 4);
+	
+		   // 3. Write the "fmt " Sub-chunk
+	file.write("fmt ", 4);
+	int subChunk1Size = 16; // 16 for PCM
+	file.write(reinterpret_cast<const char*>(&subChunk1Size), 4);
+	
+	short audioFormat = 1; // 1 = Uncompressed PCM
+	file.write(reinterpret_cast<const char*>(&audioFormat), 2);
+	file.write(reinterpret_cast<const char*>(&numChannels), 2);
+	file.write(reinterpret_cast<const char*>(&sampleRate), 4);
+	file.write(reinterpret_cast<const char*>(&byteRate), 4);
+	file.write(reinterpret_cast<const char*>(&blockAlign), 2);
+	
+	short bitsPerSample = 16;
+	file.write(reinterpret_cast<const char*>(&bitsPerSample), 2);
+	
+		   // 4. Write the "data" Sub-chunk descriptor
+	file.write("data", 4);
+	file.write(reinterpret_cast<const char*>(&subChunk2Size), 4);
+	
+		   // 5. Convert floats (-1.0 to 1.0) to 16-bit shorts (-32768 to 32767) and write
+	for (size_t i = 0; i < numSamples; ++i) {
+		// Clamp the float to prevent digital clipping/overflow distortions
+		float sample = std::max(-1.0f, std::min(1.0f, floatData[i]));
+		
+		// Scale to 16-bit integer range
+		short intSample = static_cast<short>(sample * 32767.0f);
+		
+		file.write(reinterpret_cast<const char*>(&intSample), sizeof(short));
+	}
+	
+	file.close();
+}
 
+void AudioFileProcessor::onLoopModeChanged()
+{
+	
+}
 
+void AudioFileProcessor::fixLoop()
+{
+	//const auto f_start = static_cast<f_cnt_t>(m_startPointModel.value() * m_sample.sampleSize());
+	const auto f_end = static_cast<f_cnt_t>(m_endPointModel.value() * m_sample.sampleSize());
+	const auto f_loop = static_cast<f_cnt_t>(m_loopPointModel.value() * m_sample.sampleSize());
+	
+	//get all the frames for the sample
+	const SampleFrame* sampleFrames = m_sample.data();
+	//get the sample size
+	unsigned long totalSampleFrames = m_sample.sampleSize();
+	//get the first frame of loop
+	const float* firstDataOfLoop = sampleFrames[f_loop].data();
+	unsigned long newFirstFrameOfLoop = f_loop;
+	
+	if(*firstDataOfLoop == 0){
+		for(; newFirstFrameOfLoop < totalSampleFrames;newFirstFrameOfLoop++){
+			firstDataOfLoop = sampleFrames[newFirstFrameOfLoop].data();
+			if(*firstDataOfLoop != 0){
+				break;
+			}
+		}
+	}
+	
+	//std::cerr << " f_loop ";
+	//std::cerr << f_loop;
+	//std::cerr << " totalSampleFrames ";
+	//std::cerr << totalSampleFrames;
+	
+	unsigned long newLastFrameOfLoop = -1;
+	
+	if(totalSampleFrames > 0){
+		if(*firstDataOfLoop < 0){
+			//iterate until data is > 0
+			for(;newFirstFrameOfLoop < totalSampleFrames;newFirstFrameOfLoop++){
+				//get data of this frame
+				const float* dataOfThisFrame = sampleFrames[newFirstFrameOfLoop].data();
+				if(*dataOfThisFrame > 0){
+					break;
+				}
+			}
+		}else if(*firstDataOfLoop > 0){
+			//iterate until data is < 0
+			for(;newFirstFrameOfLoop < totalSampleFrames;newFirstFrameOfLoop++){
+				//get data of this frame
+				const float* dataOfThisFrame = sampleFrames[newFirstFrameOfLoop].data();
+				if(*dataOfThisFrame < 0){
+					break;
+				}
+			}
+		}
+		//std::cerr << "test 4";
+		
+		//make sure it's not at zero this time
+		const float* lastDataOfLoop = sampleFrames[f_end].data();
+		newLastFrameOfLoop = f_end;
+		if(*lastDataOfLoop == 0){
+			for(; newLastFrameOfLoop < totalSampleFrames;newLastFrameOfLoop++){
+				lastDataOfLoop = sampleFrames[newLastFrameOfLoop].data();
+				if(*lastDataOfLoop != 0){
+					break;
+				}
+			}
+		}
+		
+		//get end of loop ready
+		if(*firstDataOfLoop < 0 && *lastDataOfLoop > 0){
+			//make end of loop in the minus
+			for(;newLastFrameOfLoop < totalSampleFrames;newLastFrameOfLoop++){
+				//get data of this frame
+				const float* dataOfThisFrame = sampleFrames[newLastFrameOfLoop].data();
+				if(*dataOfThisFrame < 0){
+					break;
+				}	
+			}
+		}
+		if(*firstDataOfLoop < 0){
+			//now make end of loop right before crossing 0
+			//iterate until data is > 0
+			for(unsigned long index = newLastFrameOfLoop;index < totalSampleFrames;index++){
+				
+				//get data of this frame
+				const float* dataOfThisFrame = sampleFrames[index].data();
+				if(*dataOfThisFrame > 0){
+					newLastFrameOfLoop = index - 1; // use index before crossing 0 for loop end
+					break;
+				}
+			}
+		}
+		//std::cerr << "test 5";
+		//get end of loop ready
+		if(*firstDataOfLoop > 0 && *lastDataOfLoop < 0){
+			//make end of loop in the pluss
+			for(;newLastFrameOfLoop < totalSampleFrames;newLastFrameOfLoop++){
+				//get data of this frame
+				const float* dataOfThisFrame = sampleFrames[newLastFrameOfLoop].data();
+				if(*dataOfThisFrame > 0){
+					break;
+				}	
+			}
+		}
+		if(*firstDataOfLoop > 0 ){
+			//now make end of loop right before crossing 0
+			//iterate until data is < 0
+			for(unsigned long index = newLastFrameOfLoop;index < totalSampleFrames;index++){
+				
+				//get data of this frame
+				const float* dataOfThisFrame = sampleFrames[index].data();
+				if(*dataOfThisFrame < 0){
+					newLastFrameOfLoop = index - 1; // use index before crossing 0 for loop end
+					break;
+				}
+			}		
+		}
+		//std::cerr << "test 6";
+		//std::cerr << "test 7";
+		
+		//std::cerr << "\n";
+		//std::cerr << " m_loopPointModel ";
+		//std::cerr << ((double)newFirstFrameOfLoop / (double)totalSampleFrames);
+		//std::cerr << " m_endPointModel ";
+		//std::cerr << ((double)newLastFrameOfLoop / (double)totalSampleFrames);
+		
+		
+		if(m_startPointModel.value() > m_loopPointModel.value() || m_startPointModel.value() >= m_endPointModel.value() ||
+			m_loopPointModel.value() >= m_endPointModel.value()){
+			m_startPointModel.setValue(.1f);
+			m_loopPointModel.setValue(.2f);
+			m_endPointModel.setValue(.9f);
+			//std::cerr << "\n";
+			//std::cerr << " m_loopPointModel after ";
+			//std::cerr << ((double)newFirstFrameOfLoop / (double)totalSampleFrames);
+			//std::cerr << " m_endPointModel after ";
+			//std::cerr << ((double)newLastFrameOfLoop / (double)totalSampleFrames);
+		}else{
+			m_loopPointModel.setValue((double)newFirstFrameOfLoop / (double)totalSampleFrames);
+			m_endPointModel.setValue((double)newLastFrameOfLoop / (double)totalSampleFrames);
+		}
+		
+	}
+	
+	//std::cerr << "test 8";
+	
+	//std::cerr << "\n";
+	//std::cerr << " m_loopPointModel ";
+	//std::cerr << ((double)newFirstFrameOfLoop / (double)totalSampleFrames);
+	//std::cerr << " m_endPointModel ";
+	//std::cerr << ((double)newLastFrameOfLoop / (double)totalSampleFrames);
+	
+	const auto f_start2 = static_cast<f_cnt_t>(m_startPointModel.value() * m_sample.sampleSize());
+	const auto f_end2 = static_cast<f_cnt_t>(m_endPointModel.value() * m_sample.sampleSize());
+	const auto f_loop2 = static_cast<f_cnt_t>(m_loopPointModel.value() * m_sample.sampleSize());
+	
+	//std::cerr << "test 9";
+	
+	
+	m_nextPlayStartPoint = f_start2;
+	
+	m_sample.setAllPointFrames(f_start2, f_end2, f_loop2, f_end2);
+	emit dataChanged();
+	
+}
+
+void AudioFileProcessor::saveLoop()
+{
+	//save loop to file
+	const SampleFrame* sampleFrames = m_sample.data();
+	const auto f_loop = static_cast<f_cnt_t>(m_loopPointModel.value() * m_sample.sampleSize());
+	const auto f_end = static_cast<f_cnt_t>(m_endPointModel.value() * m_sample.sampleSize());
+	unsigned long indexOfBuffer = 0;
+	size_t bufferSize = f_end - f_loop;
+	std::vector<float> audioBuffer(bufferSize, 0.0f); // Pre-fills everything with 0.0
+	for(unsigned long index = f_loop; index < f_end; index++){
+		const float* dataOfThisFrame = sampleFrames[index].data();			
+		
+		audioBuffer[indexOfBuffer++] = *dataOfThisFrame;
+		
+	}
+	
+		   // 1. Get the raw string and convert it to QString
+	QString samplePath = QString::fromStdString(m_sample.sampleFile().toStdString());
+	int colonIdx = samplePath.indexOf(':');
+	if (colonIdx != -1) {
+		samplePath = samplePath.mid(colonIdx + 1); // Grabs everything from after the colon to the end
+	}
+	
+	QFileInfo fileInfo(samplePath);
+	QString baseName = fileInfo.completeBaseName();
+	QString exportFileName = baseName + "_loop.wav";
+	
+	AudioFileProcessor::saveFloatArrayToWav(exportFileName.toStdString(), audioBuffer.data(), audioBuffer.size());
+	
+}
 
 void AudioFileProcessor::playNote( NotePlayHandle * _n,
 						SampleFrame* _working_buffer )
 {
+	
+	
 	const f_cnt_t frames = _n->framesLeftForCurrentPeriod();
 	const f_cnt_t offset = _n->noteOffset();
 
@@ -207,6 +478,7 @@ void AudioFileProcessor::saveSettings(QDomDocument& doc, QDomElement& elem)
 	m_loopPointModel.saveSettings(doc, elem, "lframe");
 	m_stutterModel.saveSettings(doc, elem, "stutter");
 	m_interpolationModel.saveSettings(doc, elem, "interp");
+
 }
 
 
@@ -228,6 +500,8 @@ void AudioFileProcessor::loadSettings(const QDomElement& elem)
 	}
 
 	m_loopModel.loadSettings(elem, "looped");
+	
+	
 	m_ampModel.loadSettings(elem, "amp");
 	m_endPointModel.loadSettings(elem, "eframe");
 	m_startPointModel.loadSettings(elem, "sframe");
@@ -394,6 +668,7 @@ void AudioFileProcessor::endPointChanged()
 
 void AudioFileProcessor::loopPointChanged()
 {
+	
 
 	// check that loop point is between start-end points and not overlapping with endpoint
 	// ...and move start/end points ahead if loop point is moved over them
@@ -420,10 +695,10 @@ void AudioFileProcessor::pointChanged()
 	const auto f_start = static_cast<f_cnt_t>(m_startPointModel.value() * m_sample.sampleSize());
 	const auto f_end = static_cast<f_cnt_t>(m_endPointModel.value() * m_sample.sampleSize());
 	const auto f_loop = static_cast<f_cnt_t>(m_loopPointModel.value() * m_sample.sampleSize());
-
+	
 	m_nextPlayStartPoint = f_start;
 	m_nextPlayBackwards = false;
-
+	
 	m_sample.setAllPointFrames(f_start, f_end, f_loop, f_end);
 	emit dataChanged();
 }

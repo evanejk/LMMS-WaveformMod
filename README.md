@@ -25,6 +25,27 @@
 	</p>
 </div>
 
+Is this version modified?
+--------------
+Yes. 
+
+Modified files:
+	modified:   README.md
+	modified:   plugins/AudioFileProcessor/AudioFileProcessor.cpp
+	modified:   plugins/AudioFileProcessor/AudioFileProcessor.h
+	modified:   plugins/AudioFileProcessor/AudioFileProcessorView.cpp
+	modified:   plugins/AudioFileProcessor/AudioFileProcessorView.h
+
+Added files: 
+	added:   plugins/AudioFileProcessor/fix_loop.png
+	added:   plugins/AudioFileProcessor/save_loop.png
+
+
+Date of modification:
+August 18th, 2026
+
+Modified by: Evan Kizer
+
 What is LMMS?
 --------------
 

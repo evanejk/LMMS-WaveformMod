@@ -21,6 +21,8 @@
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301 USA.
  *
+ * Modifications have been made to this file on August 18th, 2026 by Evan Kizer.
+ *
  */
 
 #ifndef LMMS_AUDIO_FILE_PROCESSOR_H
@@ -74,6 +76,9 @@ public:
 	IntModel & loopModel() { return m_loopModel; }
 	BoolModel & stutterModel() { return m_stutterModel; }
 	ComboBoxModel & interpolationModel() { return m_interpolationModel; }
+	
+	void fixLoop();
+	void saveLoop();
 
 
 public slots:
@@ -87,6 +92,7 @@ private slots:
 	void endPointChanged();
 	void pointChanged();
 	void stutterModelChanged();
+	void onLoopModeChanged();
 
 
 signals:
@@ -107,7 +113,12 @@ private:
 
 	f_cnt_t m_nextPlayStartPoint;
 	bool m_nextPlayBackwards;
+	
+	int m_loopModelValueBefore = 0;
+	
+	void saveFloatArrayToWav (const std::string& filename, const float* floatData, size_t numSamples, int sampleRate);
 } ;
+
 
 } // namespace lmms
 
