@@ -20,7 +20,7 @@
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301 USA.
  *
- * Modifications have been made to this file on August 18th, 2026 by Evan Kizer.
+ * Modifications have been made to this file on August 18th, 2026 by 007CosmicClover.
  *
  */
 

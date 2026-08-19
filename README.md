@@ -44,7 +44,7 @@ Added files:
 Date of modification:
 August 18th, 2026
 
-Modified by: Evan Kizer
+Modified by: 007CosmicClover
 
 What is LMMS?
 --------------
