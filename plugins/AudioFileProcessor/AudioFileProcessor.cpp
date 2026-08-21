@@ -100,8 +100,8 @@ AudioFileProcessor::AudioFileProcessor( InstrumentTrack * _instrument_track ) :
 				this, SLOT( loopPointChanged() ), Qt::DirectConnection );
 	connect( &m_stutterModel, SIGNAL( dataChanged() ),
 				this, SLOT( stutterModelChanged() ), Qt::DirectConnection );
-	
-	connect( &m_loopModel, SIGNAL( dataChanged() ), this, SLOT( onLoopModeChanged() ),Qt::DirectConnection);
+	connect( &m_loopModel, SIGNAL( dataChanged() ),
+				this, SLOT( onLoopModeChanged() ), Qt::DirectConnection);
 	
 	
 //interpolation modes
@@ -113,13 +113,12 @@ AudioFileProcessor::AudioFileProcessor( InstrumentTrack * _instrument_track ) :
 	pointChanged();
 }
 
-void AudioFileProcessor::saveFloatArrayToWav(const std::string& filename, const float* floatData, size_t numSamples, int sampleRate = 44100)
+void AudioFileProcessor::saveFloatArrayToWav(const std::string& filename, const float* floatData, size_t numSamples, sample_rate_t sampleRate = 44100)
 {
 	unsigned int counter = 1;
 	std::filesystem::path path = filename;
 	// Check if the file already exists; if so, alter the filename
 	while (std::filesystem::exists(path)) {
-		// Creates a new name like "output_1.bin", "output_2.bin", etc.
 		path = path.parent_path() / 
 			(path.stem().string() + "_" + std::to_string(counter) + path.extension().string());
 		counter++;
@@ -182,7 +181,6 @@ void AudioFileProcessor::onLoopModeChanged()
 
 void AudioFileProcessor::fixLoop()
 {
-	//const auto f_start = static_cast<f_cnt_t>(m_startPointModel.value() * m_sample.sampleSize());
 	const auto f_end = static_cast<f_cnt_t>(m_endPointModel.value() * m_sample.sampleSize());
 	const auto f_loop = static_cast<f_cnt_t>(m_loopPointModel.value() * m_sample.sampleSize());
 	
@@ -202,11 +200,6 @@ void AudioFileProcessor::fixLoop()
 			}
 		}
 	}
-	
-	//std::cerr << " f_loop ";
-	//std::cerr << f_loop;
-	//std::cerr << " totalSampleFrames ";
-	//std::cerr << totalSampleFrames;
 	
 	unsigned long newLastFrameOfLoop = -1;
 	
@@ -229,9 +222,7 @@ void AudioFileProcessor::fixLoop()
 					break;
 				}
 			}
-		}
-		//std::cerr << "test 4";
-		
+		}		
 		//make sure it's not at zero this time
 		const float* lastDataOfLoop = sampleFrames[f_end].data();
 		newLastFrameOfLoop = f_end;
@@ -268,7 +259,6 @@ void AudioFileProcessor::fixLoop()
 				}
 			}
 		}
-		//std::cerr << "test 5";
 		//get end of loop ready
 		if(*firstDataOfLoop > 0 && *lastDataOfLoop < 0){
 			//make end of loop in the pluss
@@ -293,26 +283,11 @@ void AudioFileProcessor::fixLoop()
 				}
 			}		
 		}
-		//std::cerr << "test 6";
-		//std::cerr << "test 7";
-		
-		//std::cerr << "\n";
-		//std::cerr << " m_loopPointModel ";
-		//std::cerr << ((double)newFirstFrameOfLoop / (double)totalSampleFrames);
-		//std::cerr << " m_endPointModel ";
-		//std::cerr << ((double)newLastFrameOfLoop / (double)totalSampleFrames);
-		
-		
 		if(m_startPointModel.value() > m_loopPointModel.value() || m_startPointModel.value() >= m_endPointModel.value() ||
-			m_loopPointModel.value() >= m_endPointModel.value()){
+			m_loopPointModel.value() >= m_endPointModel.value()){//just in case
 			m_startPointModel.setValue(.1f);
 			m_loopPointModel.setValue(.2f);
 			m_endPointModel.setValue(.9f);
-			//std::cerr << "\n";
-			//std::cerr << " m_loopPointModel after ";
-			//std::cerr << ((double)newFirstFrameOfLoop / (double)totalSampleFrames);
-			//std::cerr << " m_endPointModel after ";
-			//std::cerr << ((double)newLastFrameOfLoop / (double)totalSampleFrames);
 		}else{
 			m_loopPointModel.setValue((double)newFirstFrameOfLoop / (double)totalSampleFrames);
 			m_endPointModel.setValue((double)newLastFrameOfLoop / (double)totalSampleFrames);
@@ -320,21 +295,10 @@ void AudioFileProcessor::fixLoop()
 		
 	}
 	
-	//std::cerr << "test 8";
-	
-	//std::cerr << "\n";
-	//std::cerr << " m_loopPointModel ";
-	//std::cerr << ((double)newFirstFrameOfLoop / (double)totalSampleFrames);
-	//std::cerr << " m_endPointModel ";
-	//std::cerr << ((double)newLastFrameOfLoop / (double)totalSampleFrames);
-	
 	const auto f_start2 = static_cast<f_cnt_t>(m_startPointModel.value() * m_sample.sampleSize());
 	const auto f_end2 = static_cast<f_cnt_t>(m_endPointModel.value() * m_sample.sampleSize());
 	const auto f_loop2 = static_cast<f_cnt_t>(m_loopPointModel.value() * m_sample.sampleSize());
-	
-	//std::cerr << "test 9";
-	
-	
+
 	m_nextPlayStartPoint = f_start2;
 	
 	m_sample.setAllPointFrames(f_start2, f_end2, f_loop2, f_end2);
@@ -369,7 +333,9 @@ void AudioFileProcessor::saveLoop()
 	QString baseName = fileInfo.completeBaseName();
 	QString exportFileName = baseName + "_loop.wav";
 	
-	AudioFileProcessor::saveFloatArrayToWav(exportFileName.toStdString(), audioBuffer.data(), audioBuffer.size());
+	sample_rate_t sampleRate = Instrument::getSampleRate();
+	
+	AudioFileProcessor::saveFloatArrayToWav(exportFileName.toStdString(), audioBuffer.data(), audioBuffer.size(), sampleRate);
 	
 }
 

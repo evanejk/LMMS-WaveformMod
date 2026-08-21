@@ -116,7 +116,7 @@ private:
 	
 	int m_loopModelValueBefore = 0;
 	
-	void saveFloatArrayToWav (const std::string& filename, const float* floatData, size_t numSamples, int sampleRate);
+	void saveFloatArrayToWav (const std::string& filename, const float* floatData, size_t numSamples, sample_rate_t sampleRate);
 } ;
 
 
